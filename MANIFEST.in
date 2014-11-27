@@ -1,0 +1,5 @@
+include *.md
+include .gitignore
+graft bubblenet
+graft tests
+global-exclude *.pyc

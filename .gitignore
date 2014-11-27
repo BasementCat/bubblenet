@@ -1,0 +1,10 @@
+*.sublime-*
+*.pyc
+*.egg*
+dist
+.DS_Store
+furhire-api/fh-env
+alembic.ini
+furhire-config.yaml
+venv/
+.vagrant/
