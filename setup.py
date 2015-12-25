@@ -9,7 +9,7 @@ if os.environ.get('USER','') == 'vagrant':
 def read(filen):
     with open(os.path.join(os.path.dirname(__file__), filen), "r") as fp:
         return fp.read()
- 
+
 setup (
     name = "bubblenet",
     version = "0.1",
