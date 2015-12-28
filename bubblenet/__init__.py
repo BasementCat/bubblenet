@@ -10,10 +10,6 @@ class AddressError(Error):
     pass
 
 
-class AddressTypeMismatchError(AddressError):
-    pass
-
-
 class AddressParseError(AddressError):
     pass
 
@@ -32,7 +28,7 @@ class Address(object):
         for cls in self.__subclasses__():
             try:
                 return cls(value)
-            except AddressTypeMismatchError:
+            except AddressParseError:
                 continue
         raise AddressError("Could not determine type of address", value)
 
@@ -49,19 +45,24 @@ class IPAddress(Address):
 
 class IPv4Address(IPAddress):
     def __init__(self, value):
-        if re.match(ur'[\d.]{7,15}', value):
+        if re.match(ur'^[\d.]{7,15}$', value):
             value = value.split('.')
             if len(value) == 4:
                 int_value = 0
                 for i in range(4):
                     try:
-                        int_value |= (int(value[i]) << ((3 - i) * 8))
+                        if len(value[i]) > 1 and value[i].startswith('0'):
+                            raise AddressParseError("Octets may not start with '0'", value[i])
+                        octet = int(value[i])
+                        if octet < 0 or octet > 255:
+                            raise AddressParseError("Octet is out of range", octet)
+                        int_value |= (octet << ((3 - i) * 8))
                     except ValueError:
                         raise AddressParseError("Octet is not an integer", value[i])
                 self.value = int_value
                 return
             raise AddressParseError("Not enough octets", '.'.join(value))
-        raise AddressTypeMismatchError("Not an IPv4 address", value)
+        raise AddressParseError("Not an IPv4 address", value)
 
     def __str__(self):
         out = []
@@ -72,18 +73,21 @@ class IPv4Address(IPAddress):
 
 class IPv6Address(IPAddress):
     def __init__(self, value):
-        if re.match(ur'[\da-f:]{3,39}', value, re.I):
-            a, b = map(lambda v: filter(None, v), map(lambda v: v.split(':'), value.split('::')))
-            value = a + ['0' for _ in range(16 - (len(a) + len(b)))] + b
+        if re.match(ur'^[\da-f:]{2,39}$', value, re.I):
+            halves = map(lambda v: filter(None, v), map(lambda v: v.split(':'), value.split('::')))
+            if len(halves) == 1:
+                halves.append([])
+            a, b = halves
+            value = a + ['0' for _ in range(8 - (len(a) + len(b)))] + b
             int_value = 0
-            for i in reversed(range(16)):
+            for i in reversed(range(8)):
                 try:
                     int_value |= int(value[i], 16) << (i * 16)
                 except ValueError:
                     raise AddressParseError("Part is not a hex integer", value[i])
             self.value = int_value
             return
-        raise AddressTypeMismatchError("Not an IPv6 address", value)
+        raise AddressParseError("Not an IPv6 address", value)
 
     def __str__(self):
         out = []
@@ -99,7 +103,7 @@ class UnixSocketAddress(Address):
         if os.path.exists(value):
             self.value = value
             return
-        raise AddressTypeMismatchError("Does not appear to be a unix socket", value)
+        raise AddressParseError("Does not appear to be a unix socket", value)
 
     def __str__(self):
         return self.value
