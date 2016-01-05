@@ -1,11 +1,13 @@
+import os
 import unittest
 
-from bubblenet import (
+from bubblenet.errors import AddressParseError
+from bubblenet.addresses import (
     Address,
     IPAddress,
     IPv4Address,
     IPv6Address,
-    AddressParseError,
+    UnixSocketAddress,
     )
 
 
@@ -59,6 +61,11 @@ class ParsingTest(unittest.TestCase):
         'GB:02:3008:8CFD:AB:02:3008:8CFD',  # Invalid character G
         '2:::3',  # illegal: three colons
     ]
+    valid_unix = [
+        ('foo.sock', lambda v: v + '/foo.sock'),
+        ('bar/foo.sock', lambda v: v + '/bar/foo.sock'),
+        ('baz/../bar.sock', lambda v: v + '/bar.sock'),
+    ]
 
     def test_valid_address_v4(self):
         for addr in self.valid_v4:
@@ -87,3 +94,21 @@ class ParsingTest(unittest.TestCase):
             except AddressParseError:
                 continue
             self.assertTrue(False, msg=repr(addr))
+
+    def test_valid_address_unix(self):
+        for addr, correct in self.valid_unix:
+            try:
+                parsed = str(UnixSocketAddress(addr))
+                self.assertEquals(correct(os.getcwd()), parsed, msg=repr(correct(os.getcwd())) + ' != ' + repr(parsed))
+            except AddressParseError as e:
+                self.assertTrue(False, str(e))
+
+    def test_pick_type(self):
+        for addr in self.valid_v4:
+            self.assertIsInstance(Address.from_string(addr), IPv4Address)
+
+        for addr, correct in self.valid_v6:
+            self.assertIsInstance(Address.from_string(addr), IPv6Address)
+
+        for addr, correct in self.valid_unix:
+            self.assertIsInstance(Address.from_string(addr), UnixSocketAddress)
