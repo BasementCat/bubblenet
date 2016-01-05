@@ -74,10 +74,17 @@ class IPv4Address(IPAddress):
 class IPv6Address(IPAddress):
     def __init__(self, value):
         if re.match(ur'^[\da-f:]{2,39}$', value, re.I):
+            if re.search(ur':{3,}', value):
+                raise AddressParseError("Invalid use of '::'", value)
+            if value.startswith(':') or value.endswith(':'):
+                if not value.startswith('::') and not value.endswith('::'):
+                    raise AddressParseError("IPv6 addresses may not start or end with ':'", value)
             halves = map(lambda v: filter(None, v), map(lambda v: v.split(':'), value.split('::')))
             if len(halves) == 1:
                 halves.append([])
-            a, b = halves
+            a, b = halves[:2]
+            if (len(a) + len(b) + (1 if len(b) else 0)) > 8 or len(halves) > 2:
+                raise AddressParseError("IPv6 address is too long", value)
             value = a + ['0' for _ in range(8 - (len(a) + len(b)))] + b
             int_value = 0
             for i in reversed(range(8)):
@@ -91,8 +98,8 @@ class IPv6Address(IPAddress):
 
     def __str__(self):
         out = []
-        for i in range(16):
-            out.append(str((self.value >> ((16 - i) * 16)) & 65535))
+        for i in reversed(range(8)):
+            out.append('{:04x}'.format((self.value >> (i * 16)) & 65535))
         return ':'.join(reversed(out))
 
 

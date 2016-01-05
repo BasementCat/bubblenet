@@ -30,15 +30,24 @@ class ParsingTest(unittest.TestCase):
         '00000000000005.10.10.10',
     ]
     valid_v6 = [
-        '00AB:0002:3008:8CFD:00AB:0002:3008:8CFD',  # full length
-        # '00ab:0002:3008:8cfd:00ab:0002:3008:8cfd',  # lowercase
-        # '00aB:0002:3008:8cFd:00Ab:0002:3008:8cfD',  # mixed case
-        # 'AB:02:3008:8CFD:AB:02:3008:8CFD',  # abbreviated
-        # 'AB:02:3008:8CFD::02:3008:8CFD',  # correct use of ::
-        # '::',  # unassigned IPv6 address
-        # '::1',  # loopback IPv6 address
-        # '0::',  # another name for unassigned IPv6 address
-        # '0::0',  # another name for unassigned IPv6 address
+        ('00AB:0002:3008:8CFD:00AB:0002:3008:8CFD',  # full length
+            '00ab:0002:3008:8cfd:00ab:0002:3008:8cfd'),
+        ('00ab:0002:3008:8cfd:00ab:0002:3008:8cfd',  # lowercase
+            '00ab:0002:3008:8cfd:00ab:0002:3008:8cfd'),
+        ('00aB:0002:3008:8cFd:00Ab:0002:3008:8cfD',  # mixed case
+            '00ab:0002:3008:8cfd:00ab:0002:3008:8cfd'),
+        ('AB:02:3008:8CFD:AB:02:3008:8CFD',  # abbreviated
+            '00ab:0002:3008:8cfd:00ab:0002:3008:8cfd'),
+        ('AB:02:3008:8CFD::02:3008:8CFD',  # correct use of ::
+            '00ab:0002:3008:8cfd:0000:0002:3008:8cfd'),
+        ('::',  # unassigned IPv6 address
+            '0000:0000:0000:0000:0000:0000:0000:0000'),
+        ('::1',  # loopback IPv6 address
+            '0000:0000:0000:0000:0000:0000:0000:0001'),
+        ('0::',  # another name for unassigned IPv6 address
+            '0000:0000:0000:0000:0000:0000:0000:0000'),
+        ('0::0',  # another name for unassigned IPv6 address
+            '0000:0000:0000:0000:0000:0000:0000:0000'),
     ]
     invalid_v6 = [
         '00AB:00002:3008:8CFD:00AB:0002:3008:8CFD',  # at most 4 digits per segment
@@ -64,17 +73,17 @@ class ParsingTest(unittest.TestCase):
             self.assertTrue(False, msg=repr(addr))
 
     def test_valid_address_v6(self):
-        for addr in self.valid_v6:
+        for addr, correct in self.valid_v6:
             try:
                 parsed = str(IPv6Address(addr))
-                self.assertEquals(addr, parsed, msg=repr(addr) + ' != ' + repr(parsed))
+                self.assertEquals(correct, parsed, msg=repr(correct) + ' != ' + repr(parsed))
             except AddressParseError as e:
-                self.assertTrue(false, str(e))
+                self.assertTrue(False, str(e))
 
-    # def test_invalid_address_v6(self):
-    #     for addr in self.invalid_v6:
-    #         try:
-    #             IPv6Address(addr)
-    #         except AddressParseError:
-    #             continue
-    #         self.assertTrue(False, msg=repr(addr))
+    def test_invalid_address_v6(self):
+        for addr in self.invalid_v6:
+            try:
+                IPv6Address(addr)
+            except AddressParseError:
+                continue
+            self.assertTrue(False, msg=repr(addr))
