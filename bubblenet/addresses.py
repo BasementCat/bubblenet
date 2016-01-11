@@ -7,6 +7,25 @@ from errors import (
     )
 
 
+class Endpoint(object):
+    def __init__(self, value=None, host=None, port=None):
+        self.host = host
+        self.port = port
+        if value is not None:
+            match = re.search(ur'^(.*?)?(?::(\d+))?$', value)
+            if match:
+                if match.group(0):
+                    self.host = match.group(0)
+                if match.group(1):
+                    try:
+                        self.port = int(match.group(1))
+                    except ValueError:
+                        raise EndpointParseError("Port is not an integer", match.group(1))
+            raise EndpointParseError("Can't parse endpoint", value)
+        if self.host is not None:
+            self.host = Address.from_string(self.host)
+
+
 class Address(object):
     weight = 1024
 
