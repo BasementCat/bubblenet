@@ -1,10 +1,30 @@
 import threading
 import socket
 import ssl
+import select
+
+from bubbler import Bubbler
 
 
-class Listener(object):
-    def __init__(self, host, port=None, start_now=True, family=socket.AF_INET, type_=socket.SOCK_STREAM, backlog=1):
+class PublisherMixin(object):
+    def __init__(self, context=None, context_name=None):
+        self.publisher_contexts = []
+        self.add_publisher_context(context=context, context_name=context_name)
+
+    def add_publisher_context(self, context=None, context_name=None):
+        if context:
+            self.publisher_contexts.append(context)
+        elif context_name:
+            self.publisher_contexts.append(Bubbler.getContext(context_name))
+
+    def publish(self, *args, **kwargs):
+        return [context.trigger(*args, **kwargs) for context in self.publisher_contexts]
+
+
+class Listener(PublisherMixin):
+    def __init__(self, host, port=None, start_now=True, family=socket.AF_INET, type_=socket.SOCK_STREAM, backlog=1, *args, **kwargs):
+        super(Listener, self).__init__(*args, **kwargs)
+
         assert family in (socket.AF_INET, socket.AF_INET6, socket.AF_UNIX),
             "Unsupported family (need one of AF_INET, AF_INET6, or AF_UNIX)"
 
@@ -55,6 +75,8 @@ class Listener(object):
 
             self._init_ssl()
 
+        self.publish('listener/start', listener=self)
+
     def stop(self):
         with self.lock:
             if self.started:
@@ -62,6 +84,8 @@ class Listener(object):
                 self.listen_socket.close()
                 self.listen_socket = None
                 self.started = False
+
+        self.publish('listener/stop', listener=self)
 
     def accept(self):
         with self.lock:
@@ -100,8 +124,10 @@ class Listener(object):
             return self.children[conn_sock]
 
 
-class Connection(object):
-    def __init__(self, host, port=None, connect_now=True, inbound=False, existing_socket=None, listener=None, family=socket.AF_INET, type_=socket.SOCK_STREAM, recv_bufsize=None):
+class Connection(PublisherMixin):
+    def __init__(self, host, port=None, connect_now=True, inbound=False, existing_socket=None, listener=None, family=socket.AF_INET, type_=socket.SOCK_STREAM, recv_bufsize=None, *args, **kwargs):
+        super(Connection, self).__init__(*args, **kwargs)
+
         assert family in (socket.AF_INET, socket.AF_INET6, socket.AF_UNIX),
             "Unsupported family (need one of AF_INET, AF_INET6, or AF_UNIX)"
 
@@ -129,6 +155,8 @@ class Connection(object):
             self.listener = listener
             if self.listener:
                 self.listener._add_child(self)
+
+            self.publish('connection/inbound', connection=self)
         else:
             if connect_now:
                 self.connect()
@@ -162,6 +190,8 @@ class Connection(object):
 
             self._init_ssl()
 
+        self.publish('connection/outbound', connection=self)
+
     def disconnect(self):
         with self.lock:
             if self.connected:
@@ -171,6 +201,8 @@ class Connection(object):
                 self.connected = False
                 if self.listener:
                     self.listener._remove_child(self)
+
+        self.publish('connection/disconnect', connection=self)
 
     def send(self, data, send_all=True):
         with self.lock:
@@ -183,6 +215,27 @@ class Connection(object):
         with self.lock:
             assert self.connected, "Can't receive from a disconnected socket"
             return self.connect_socket.recv(bufsize or self.recv_bufsize)
+
+
+def Poller(object):
+    ALL_METHODS = ['epoll', 'poll', 'select', 'kqueue', 'kevent']
+    SUPPORTED_METHODS = ['select']
+
+    def __init__(self, method=None, method_priority=None):
+        if method:
+            assert method in self.ALL_METHODS, "Poll/select method {} does not exist".format(method)
+
+            if method not in self.SUPPORTED_METHODS:
+                raise NotImplementedError("Poll/select method {} is not implemented".format(method))
+
+            assert getattr(select, method, None), "Poll/select method {} is not available on this platform".format(method)
+
+            self.method = method
+        else:
+            valid_methods = [method for method in self.SUPPORTED_METHODS if getattr(select, method, None)]
+            if not valid_methods:
+                raise NotImplementedError("No implemented poll or select methods are available on this platform")
+            self.method = valid_methods[0]
 
 
 # class ConnectionGroup(object):
